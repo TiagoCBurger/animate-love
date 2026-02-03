@@ -1,0 +1,13 @@
+{
+  "name": "animalove",
+  "private": true,
+  "workspaces": [
+    "next-app"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w next-app",
+    "build": "npm run build -w next-app",
+    "start": "npm run start -w next-app",
+    "lint": "npm run lint -w next-app"
+  }
+}

@@ -78,6 +78,49 @@ export async function generateWithNanoBananaPro(
 }
 
 /**
+ * Generate an image using Nano Banana Edit (image-to-image editing)
+ *
+ * @example
+ * ```ts
+ * const result = await generateWithNanoBananaEdit({
+ *   prompt: "Transform this into anime style",
+ *   imageUrl: "https://example.com/photo.jpg",
+ *   aspectRatio: "1:1",
+ *   outputFormat: "png"
+ * });
+ * console.log(result.resultUrls);
+ * ```
+ */
+export async function generateWithNanoBananaEdit(
+  options: NanoBananaProOptions & { imageUrl?: string; imageUrls?: string[] }
+): Promise<KieTaskResult> {
+  const urls = options.imageUrls || (options.imageUrl ? [options.imageUrl] : []);
+  const input: Record<string, unknown> = {
+    prompt: options.prompt,
+    image_urls: urls,
+    image_size: options.aspectRatio || "1:1",
+    output_format: options.outputFormat || "png",
+  };
+
+  const taskId = await createTask(
+    KIE_MODELS.NANO_BANANA_EDIT,
+    input,
+    options.callbackUrl
+  );
+
+  // If callback URL provided, return early with taskId
+  if (options.callbackUrl) {
+    return {
+      taskId,
+      status: "pending",
+    };
+  }
+
+  // Otherwise, wait for completion
+  return waitForTask(taskId);
+}
+
+/**
  * Start Nano Banana generation (async, returns taskId)
  */
 export async function startNanoBananaGeneration(
@@ -90,4 +133,21 @@ export async function startNanoBananaGeneration(
   };
 
   return createTask(KIE_MODELS.NANO_BANANA, input, options.callbackUrl);
+}
+
+/**
+ * Start Nano Banana Edit generation (async, returns taskId)
+ */
+export async function startNanoBananaEditGeneration(
+  options: NanoBananaProOptions & { imageUrl?: string; imageUrls?: string[] }
+): Promise<string> {
+  const urls = options.imageUrls || (options.imageUrl ? [options.imageUrl] : []);
+  const input: Record<string, unknown> = {
+    prompt: options.prompt,
+    image_urls: urls,
+    image_size: options.aspectRatio || "1:1",
+    output_format: options.outputFormat || "png",
+  };
+
+  return createTask(KIE_MODELS.NANO_BANANA_EDIT, input, options.callbackUrl);
 }

@@ -1,0 +1,77 @@
+import {
+  Heart,
+  Sparkles,
+  Film,
+  Palette,
+  Camera,
+  Brush,
+  Boxes,
+} from "lucide-react";
+
+export const STYLE_PRESETS = {
+  romantic: {
+    id: "romantic",
+    name: "Romantico",
+    description: "Estilo suave com tons quentes",
+    icon: Heart,
+    color: "from-pink-500 to-rose-500",
+    bgColor: "from-pink-500/20 to-rose-500/20",
+    prompt: "romantic soft warm tones, dreamy lighting, love story aesthetic",
+  },
+  anime: {
+    id: "anime",
+    name: "Anime",
+    description: "Estilo anime japones",
+    icon: Sparkles,
+    color: "from-violet-500 to-purple-500",
+    bgColor: "from-violet-500/20 to-purple-500/20",
+    prompt: "anime style, Japanese animation, vibrant colors, expressive eyes",
+  },
+  pixar: {
+    id: "pixar",
+    name: "Pixar 3D",
+    description: "Estilo 3D cartoon Disney/Pixar",
+    icon: Film,
+    color: "from-blue-500 to-cyan-500",
+    bgColor: "from-blue-500/20 to-cyan-500/20",
+    prompt: "3D cartoon style, Disney Pixar animation, smooth rendering, vibrant",
+  },
+  watercolor: {
+    id: "watercolor",
+    name: "Aquarela",
+    description: "Pintura artistica em aquarela",
+    icon: Palette,
+    color: "from-teal-500 to-emerald-500",
+    bgColor: "from-teal-500/20 to-emerald-500/20",
+    prompt: "watercolor painting style, artistic, soft brushstrokes, flowing colors",
+  },
+  vintage: {
+    id: "vintage",
+    name: "Vintage",
+    description: "Fotografia retro anos 70-80",
+    icon: Camera,
+    color: "from-amber-500 to-orange-500",
+    bgColor: "from-amber-500/20 to-orange-500/20",
+    prompt: "vintage 70s 80s retro photography, film grain, warm tones, nostalgic",
+  },
+  oilpainting: {
+    id: "oilpainting",
+    name: "Pintura a Oleo",
+    description: "Classica pintura renascentista",
+    icon: Brush,
+    color: "from-red-500 to-rose-600",
+    bgColor: "from-red-500/20 to-rose-600/20",
+    prompt: "oil painting style, renaissance classical art, rich textures, dramatic lighting",
+  },
+  lego: {
+    id: "lego",
+    name: "LEGO",
+    description: "Blocos LEGO coloridos e vibrantes",
+    icon: Boxes,
+    color: "from-yellow-500 to-red-500",
+    bgColor: "from-yellow-500/20 to-red-500/20",
+    prompt: "LEGO brick style, colorful plastic blocks, toy photography, vibrant playful aesthetic",
+  },
+} as const;
+
+export type StyleId = keyof typeof STYLE_PRESETS;

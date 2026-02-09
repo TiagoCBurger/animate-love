@@ -19,7 +19,9 @@ export * from "./types";
 export {
   generateWithNanoBanana,
   generateWithNanoBananaPro,
+  generateWithNanoBananaEdit,
   startNanoBananaGeneration,
+  startNanoBananaEditGeneration,
 } from "./models/nano-banana";
 
 export {
@@ -51,3 +53,15 @@ export {
   generateSora2ProFromImage,
   startSora2Generation,
 } from "./models/sora2";
+
+// Kling Video Models
+export {
+  generateWithKling,
+  generateKlingWithMultishot,
+  startKlingGeneration,
+  startKlingMultishotGeneration,
+  batchStartKlingGeneration,
+  createMultishotPrompt,
+  MULTISHOT_PROMPTS,
+  type MultishotPromptType,
+} from "./models/kling";

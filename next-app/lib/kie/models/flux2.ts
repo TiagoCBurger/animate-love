@@ -45,17 +45,31 @@ export async function generateWithFlux2(
 
 /**
  * Generate image from another image using Flux 2 Pro (Image to Image)
+ * Follows the official API specification
  */
 export async function generateWithFlux2ImageToImage(
-  options: Flux2Options & { imageUrl: string; strength?: number }
+  options: Flux2Options & { imageUrl: string | string[]; strength?: number }
 ): Promise<KieTaskResult> {
+  // Convert single imageUrl to array format required by API
+  const imageUrls = Array.isArray(options.imageUrl)
+    ? options.imageUrl
+    : [options.imageUrl];
+
+  console.log("=== [Flux2 Image-to-Image] FINAL API CALL ===");
+  console.log(`[Flux2 Image-to-Image] input_urls count: ${imageUrls.length}`);
+  imageUrls.forEach((url, i) => {
+    console.log(`[Flux2 Image-to-Image] input_urls[${i}]: ${url}`);
+  });
+
   const input: Record<string, unknown> = {
+    input_urls: imageUrls,
     prompt: options.prompt,
-    image_url: options.imageUrl,
     aspect_ratio: options.aspectRatio || "1:1",
     resolution: options.resolution || "1K",
   };
 
+  // Note: strength is not in the official API spec for this model
+  // Keeping it for backward compatibility but it may not have effect
   if (options.strength !== undefined) {
     input.strength = options.strength;
   }

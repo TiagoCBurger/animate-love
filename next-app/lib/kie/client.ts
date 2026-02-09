@@ -16,6 +16,13 @@ async function kieRequest<T>(
 ): Promise<KieApiResponse<T>> {
   const url = `${KIE_API_BASE_URL}${endpoint}`;
 
+  console.log("[KIE Client] Request:", options.method || "GET", url);
+
+  if (!KIE_API_KEY) {
+    console.error("[KIE Client] ERROR: KIE_API_KEY is not configured!");
+    throw new KieApiError(401, "KIE_API_KEY is not configured", {});
+  }
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -27,7 +34,11 @@ async function kieRequest<T>(
 
   const data = await response.json();
 
+  console.log("[KIE Client] Response status:", response.status);
+  console.log("[KIE Client] Response code:", data.code, "msg:", data.msg);
+
   if (data.code !== 200) {
+    console.error("[KIE Client] API Error:", data);
     throw new KieApiError(data.code, data.msg, data);
   }
 
@@ -56,10 +67,14 @@ export async function createTask(
     body.progressCallBackUrl = progressCallbackUrl;
   }
 
+  console.log("[KIE Client] Creating task with body:", JSON.stringify(body, null, 2));
+
   const response = await kieRequest<KieTaskResponse>("/jobs/createTask", {
     method: "POST",
     body: JSON.stringify(body),
   });
+
+  console.log("[KIE Client] Task created successfully:", response.data.taskId);
 
   return response.data.taskId;
 }
@@ -119,12 +134,73 @@ export async function createVeoTask(
  * Query task status and results
  */
 export async function getTaskStatus(taskId: string): Promise<KieTaskResult> {
-  const response = await kieRequest<KieTaskResult>(
-    `/jobs/taskInfo?taskId=${encodeURIComponent(taskId)}`,
-    { method: "GET" }
-  );
+  console.log("[KIE Client] Fetching status for taskId:", taskId);
 
-  return response.data;
+  const response = await kieRequest<{
+    taskId: string;
+    model: string;
+    state: "waiting" | "generating" | "success" | "fail";
+    param: string;
+    resultJson: string | null;
+    failCode: string | null;
+    failMsg: string | null;
+    costTime: number | null;
+    completeTime: number | null;
+    createTime: number;
+  }>(`/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { method: "GET" });
+
+  const data = response.data;
+
+  console.log("[KIE Client] Raw API response:", JSON.stringify(data, null, 2));
+
+  // Parse resultJson if available
+  let resultUrls: string[] | undefined;
+  if (data.resultJson) {
+    try {
+      const parsed = JSON.parse(data.resultJson);
+      resultUrls = parsed.resultUrls;
+      console.log("[KIE Client] Parsed resultUrls:", resultUrls);
+    } catch (e) {
+      console.warn("[KIE Client] Failed to parse resultJson:", e);
+    }
+  }
+
+  // Convert state to status for consistency
+  // Kie.ai states: "waiting", "generating", "success", "fail"
+  let status: "pending" | "processing" | "completed" | "failed";
+
+  switch (data.state) {
+    case "waiting":
+      status = "pending";
+      break;
+    case "generating":
+      status = "processing";
+      break;
+    case "success":
+      status = "completed";
+      break;
+    case "fail":
+      status = "failed";
+      break;
+    default:
+      // Unknown state - treat as processing to avoid false failures
+      console.warn(`[KIE Client] Unknown state: "${data.state}", treating as processing`);
+      status = "processing";
+  }
+
+  console.log("[KIE Client] Mapped status:", {
+    rawState: data.state,
+    mappedStatus: status,
+    failCode: data.failCode,
+    failMsg: data.failMsg
+  });
+
+  return {
+    taskId: data.taskId,
+    status,
+    resultUrls,
+    error: data.failMsg || undefined,
+  };
 }
 
 /**

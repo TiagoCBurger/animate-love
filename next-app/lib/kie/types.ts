@@ -23,6 +23,9 @@ export interface KieTaskResult {
   error?: string;
 }
 
+// Raw state values returned by Kie.ai API
+export type KieRawState = "waiting" | "generating" | "success" | "fail";
+
 // =============================================================================
 // Image Generation Types
 // =============================================================================
@@ -104,6 +107,21 @@ export interface Sora2Options {
   progressCallbackUrl?: string;
 }
 
+// Kling 2.5
+export type KlingDuration = "5" | "10";
+export type KlingModel = "v2.5-turbo-pro" | "v2.5-turbo" | "v2.1-master" | "v2.1-standard";
+
+export interface KlingOptions {
+  prompt: string;
+  imageUrl: string;
+  tailImageUrl?: string;
+  duration?: KlingDuration;
+  negativePrompt?: string;
+  cfgScale?: number;
+  model?: KlingModel;
+  callbackUrl?: string;
+}
+
 // =============================================================================
 // Model Names
 // =============================================================================
@@ -129,6 +147,12 @@ export const KIE_MODELS = {
   SORA2_PRO_TEXT_TO_VIDEO: "sora-2-pro-text-to-video",
   SORA2_PRO_IMAGE_TO_VIDEO: "sora-2-pro-image-to-video",
   SORA2_CHARACTERS: "sora-2-characters",
+
+  // Kling Video Models
+  KLING_V2_5_TURBO_PRO: "kling/v2-5-turbo-image-to-video-pro",
+  KLING_V2_5_TURBO_STANDARD: "kling/v2-5-turbo-image-to-video",
+  KLING_V2_1_MASTER: "kling/v2-1-master-image-to-video",
+  KLING_V2_1_STANDARD: "kling/v2-1-standard-image-to-video",
 } as const;
 
 export type KieModelName = (typeof KIE_MODELS)[keyof typeof KIE_MODELS];

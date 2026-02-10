@@ -38,11 +38,12 @@ async function generateStyledImage(imageUrl: string, style: string): Promise<str
     }),
   });
 
+  const data = await response.json();
+
   if (!response.ok) {
-    throw new Error("Failed to generate styled image");
+    throw new Error(data.details || data.error || "Failed to generate styled image");
   }
 
-  const data = await response.json();
   return data.image?.imageUrl || data.image?.url;
 }
 

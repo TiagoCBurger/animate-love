@@ -12,6 +12,7 @@ import { LandingStep } from "./_components/steps/LandingStep";
 import { CharactersStep } from "./_components/steps/CharactersStep";
 import { StyleStep } from "./_components/steps/StyleStep";
 import { ScenesStep } from "./_components/steps/ScenesStep";
+import { EmailStep } from "./_components/steps/EmailStep";
 import { ScenePreviewStep } from "./_components/steps/ScenePreviewStep";
 import { PaywallStep } from "./_components/steps/PaywallStep";
 import { LoadingStep } from "./_components/steps/LoadingStep";
@@ -40,7 +41,7 @@ export default function FunnelPage() {
     clearDraft,
   } = useFunnelState();
 
-  const { isAuthenticated, credits, refreshCredits } = useAuth();
+  const { isAuthenticated, user, credits, refreshCredits } = useAuth();
   const searchParams = useSearchParams();
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -59,6 +60,20 @@ export default function FunnelPage() {
       refreshCredits();
     }
   }, [isAuthenticated, refreshCredits]);
+
+  // Auto-redirect when user is authenticated and on email-verification step
+  useEffect(() => {
+    if (state.step === "email-verification" && isAuthenticated) {
+      setStep("paywall");
+    }
+  }, [state.step, isAuthenticated, setStep]);
+
+  // Auto-redirect from paywall when user already has credits
+  useEffect(() => {
+    if (state.step === "paywall" && isAuthenticated && credits >= 1) {
+      setStep("scenes");
+    }
+  }, [state.step, isAuthenticated, credits, setStep]);
 
   const { generateAllPreviews } = useStylePreview({
     characters: state.characters,
@@ -99,8 +114,10 @@ export default function FunnelPage() {
   const handleContinueToScenes = useCallback(() => {
     if (!state.selectedStyle) return;
 
-    // Generate style previews in the background
-    generateAllPreviews();
+    // Only generate style previews for authenticated users with credits
+    if (isAuthenticated && credits >= 1) {
+      generateAllPreviews();
+    }
 
     // Initialize with a default scene if empty
     if (state.scenes.length === 0 && state.characters.length > 0) {
@@ -109,26 +126,43 @@ export default function FunnelPage() {
     }
 
     setStep("scenes");
-  }, [state.selectedStyle, state.scenes.length, state.characters, generateAllPreviews, setScenes, setStep]);
+  }, [state.selectedStyle, state.scenes.length, state.characters, isAuthenticated, credits, generateAllPreviews, setScenes, setStep]);
 
   const handleStartProcessing = useCallback(() => {
-    // Check auth + credits before generating
-    if (!isAuthenticated || credits < 1) {
-      // Save current state before redirecting to paywall
+    // Not authenticated → go to email verification first
+    if (!isAuthenticated) {
+      saveDraft();
+      setStep("email-verification");
+      return;
+    }
+
+    // Authenticated but no credits → go to paywall
+    if (credits < 1) {
       saveDraft();
       setStep("paywall");
       return;
     }
 
+    // Authenticated with credits → generate
     setGenerationProgress(null);
     setGenerationError(null);
     setStep("scene-preview");
     generateSceneImagesOnly();
   }, [isAuthenticated, credits, saveDraft, setStep, setGenerationProgress, setGenerationError, generateSceneImagesOnly]);
 
+  const handleEmailVerified = useCallback(() => {
+    refreshCredits();
+    setStep("paywall");
+  }, [refreshCredits, setStep]);
+
   const handleConfirmAndAnimate = useCallback(() => {
-    // Check auth + credits before animating
-    if (!isAuthenticated || credits < 1) {
+    if (!isAuthenticated) {
+      saveDraft();
+      setStep("email-verification");
+      return;
+    }
+
+    if (credits < 1) {
       saveDraft();
       setStep("paywall");
       return;
@@ -155,10 +189,9 @@ export default function FunnelPage() {
     runPipeline();
   }, [setGenerationError, runPipeline]);
 
-  const handleSelectPlan = useCallback(async (planId: PlanId, email: string, name: string) => {
+  const handleSelectPlan = useCallback(async (planId: PlanId) => {
     setPaymentLoading(true);
     try {
-      // Save draft before redirecting
       saveDraft();
 
       const response = await fetch("/api/payment/create", {
@@ -166,19 +199,22 @@ export default function FunnelPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           planId,
-          customer: { name, email },
+          customer: {
+            name: user?.user_metadata?.name || user?.email || "",
+            email: user?.email || "",
+          },
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to create payment");
-
       const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Failed to create payment");
       window.location.href = data.billing.url;
     } catch (error) {
       console.error("Payment error:", error);
       setPaymentLoading(false);
     }
-  }, [saveDraft]);
+  }, [saveDraft, user]);
 
   const handleGenerationComplete = useCallback(() => {
     clearDraft();
@@ -194,19 +230,18 @@ export default function FunnelPage() {
           </div>
           <h2 className="text-2xl font-bold mb-3">Pagamento confirmado!</h2>
           <p className="text-zinc-400 mb-6">
-            Enviamos um link de acesso para o email usado no pagamento.
-            Verifique sua caixa de entrada (e spam) e clique no link para acessar.
+            Seus creditos serao adicionados em instantes.
+            Aguarde nesta pagina ou volte ao funil.
           </p>
-          <div className="flex items-center justify-center gap-2 text-zinc-500 mb-8">
-            <Mail className="w-5 h-5" />
-            <span className="text-sm">Verifique seu email</span>
-          </div>
           <Button
-            onClick={() => window.location.href = "/auth/login"}
-            variant="outline"
-            className="border-zinc-700 text-zinc-300 hover:text-white"
+            onClick={() => {
+              refreshCredits();
+              setPaymentSuccess(false);
+              setStep("scenes");
+            }}
+            className="bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white border-0"
           >
-            Ir para login
+            Voltar ao funil
           </Button>
         </div>
       </div>
@@ -251,6 +286,13 @@ export default function FunnelPage() {
           onRemoveScene={removeScene}
           onStartProcessing={handleStartProcessing}
           onBack={() => setStep("style")}
+        />
+      )}
+
+      {state.step === "email-verification" && (
+        <EmailStep
+          onVerified={handleEmailVerified}
+          onBack={() => setStep("scenes")}
         />
       )}
 

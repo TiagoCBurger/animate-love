@@ -34,6 +34,7 @@ export type FunnelStep =
   | "characters"
   | "style"
   | "scenes"
+  | "email-verification"
   | "scene-preview"
   | "paywall"
   | "loading"

@@ -8,7 +8,7 @@ import { createScene } from "@/types/scene";
 const DRAFT_KEY = "funnel_draft";
 
 // Steps that represent meaningful progress worth saving
-const SAVEABLE_STEPS: FunnelStep[] = ["characters", "style", "scenes", "scene-preview", "paywall"];
+const SAVEABLE_STEPS: FunnelStep[] = ["characters", "style", "scenes", "email-verification", "scene-preview", "paywall"];
 
 const initialState: FunnelState = {
   step: "landing",

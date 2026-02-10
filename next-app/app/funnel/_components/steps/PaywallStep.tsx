@@ -6,7 +6,7 @@ import { PLANS, type PlanId } from "@/lib/abacatepay/plans";
 import { ArrowLeft, Check, Crown, Sparkles, Zap } from "lucide-react";
 
 interface PaywallStepProps {
-  onSelectPlan: (planId: PlanId, email: string, name: string) => void;
+  onSelectPlan: (planId: PlanId) => void;
   onBack: () => void;
   isLoading: boolean;
 }
@@ -37,13 +37,10 @@ const PLAN_COLORS: Record<PlanId, { bg: string; border: string; badge: string }>
 
 export function PaywallStep({ onSelectPlan, onBack, isLoading }: PaywallStepProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("plan_3");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !name) return;
-    onSelectPlan(selectedPlan, email, name);
+    onSelectPlan(selectedPlan);
   };
 
   return (
@@ -130,48 +127,18 @@ export function PaywallStep({ onSelectPlan, onBack, isLoading }: PaywallStepProp
           })}
         </div>
 
-        {/* Customer info form */}
-        <form onSubmit={handleSubmit} className="space-y-4 max-w-md mx-auto">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-zinc-300 mb-1">
-              Seu nome
-            </label>
-            <input
-              id="name"
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Seu nome completo"
-              className="w-full rounded-xl bg-zinc-900 border border-zinc-700 px-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:border-pink-500 transition-colors"
-            />
-          </div>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-zinc-300 mb-1">
-              Seu email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              className="w-full rounded-xl bg-zinc-900 border border-zinc-700 px-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:border-pink-500 transition-colors"
-            />
-          </div>
-
+        {/* Pay button */}
+        <form onSubmit={handleSubmit} className="max-w-md mx-auto">
           <Button
             type="submit"
-            disabled={isLoading || !email || !name}
-            className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white border-0 rounded-xl shadow-lg shadow-pink-500/25 transition-all"
+            disabled={isLoading}
+            className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white border-0 rounded-xl shadow-lg shadow-pink-500/25 transition-all disabled:opacity-50"
           >
             {isLoading ? "Processando..." : `Pagar R$${(PLANS[selectedPlan].price / 100).toFixed(2).replace(".", ",")}`}
           </Button>
 
-          <p className="text-xs text-center text-zinc-500">
+          <p className="text-xs text-center text-zinc-500 mt-4">
             Pagamento seguro via PIX pelo AbacatePay.
-            Após o pagamento, enviaremos um link de acesso para seu email.
           </p>
         </form>
       </div>

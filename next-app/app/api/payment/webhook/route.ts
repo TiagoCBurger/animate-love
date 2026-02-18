@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WebhookEvent } from "@/lib/abacatepay";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { addCredits } from "@/lib/supabase/credits";
+import { addBalance } from "@/lib/supabase/credits";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -119,13 +119,13 @@ async function handleBillingPaid(event: WebhookEvent) {
     console.log("Created new user:", userId);
   }
 
-  // Add credits
+  // Add credits (1 credit = 1 internal unit)
   if (totalCredits > 0) {
     try {
-      const newBalance = await addCredits(userId, totalCredits, id);
+      const newBalance = await addBalance(userId, totalCredits, id);
       console.log(`Added ${totalCredits} credits to user ${userId}. New balance: ${newBalance}`);
     } catch (error) {
-      console.error("Failed to add credits:", error);
+      console.error("Failed to add balance:", error);
     }
   }
 

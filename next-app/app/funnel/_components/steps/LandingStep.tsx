@@ -2,22 +2,33 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Heart, Sparkles, LogIn } from "lucide-react";
+import { Heart, Sparkles, LogIn, LayoutDashboard } from "lucide-react";
 
 interface LandingStepProps {
   onStart: () => void;
+  isAuthenticated?: boolean;
 }
 
-export function LandingStep({ onStart }: LandingStepProps) {
+export function LandingStep({ onStart, isAuthenticated }: LandingStepProps) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-4">
-      <Link
-        href="/auth/login"
-        className="absolute top-4 left-4 z-20 flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
-      >
-        <LogIn className="w-4 h-4" />
-        Ja tenho conta
-      </Link>
+      {isAuthenticated ? (
+        <Link
+          href="/dashboard"
+          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+        >
+          <LayoutDashboard className="w-4 h-4" />
+          Meus Projetos
+        </Link>
+      ) : (
+        <Link
+          href="/auth/login"
+          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+        >
+          <LogIn className="w-4 h-4" />
+          Ja tenho conta
+        </Link>
+      )}
 
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-pink-900/30 via-transparent to-transparent" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-r from-pink-500/10 to-rose-500/10 rounded-full blur-3xl" />

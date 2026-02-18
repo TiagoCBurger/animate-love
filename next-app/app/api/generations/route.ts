@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { consumeCredit } from "@/lib/supabase/credits";
 
 export async function GET() {
   try {
@@ -54,17 +53,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Consume a credit
-    const consumed = await consumeCredit(user.id);
-    if (!consumed) {
-      return NextResponse.json(
-        { error: "No credits available" },
-        { status: 402 }
-      );
-    }
-
     const body = await request.json();
-    const { style, characters, scenes, videoUrls } = body;
+    const { style, characters, scenes, videoUrls, name, thumbnailUrl, aspectRatio } = body;
+
+    // Auto-generate name if not provided: style + date
+    const autoName =
+      name ||
+      `${style ? style.charAt(0).toUpperCase() + style.slice(1) : "Projeto"} - ${new Date().toLocaleDateString("pt-BR")}`;
+
+    // Use first scene imageUrl as thumbnail if not explicitly provided
+    const autoThumbnail =
+      thumbnailUrl || scenes?.[0]?.imageUrl || null;
 
     // Save generation using admin client (user RLS only allows INSERT)
     const adminClient = createAdminClient();
@@ -73,10 +72,13 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         style: style || "unknown",
+        aspect_ratio: aspectRatio || "9:16",
         characters: characters || [],
         scenes: scenes || [],
         video_urls: videoUrls || [],
         status: "completed",
+        name: autoName,
+        thumbnail_url: autoThumbnail,
       })
       .select()
       .single();

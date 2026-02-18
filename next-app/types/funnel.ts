@@ -62,10 +62,13 @@ export interface GenerationProgress {
 // Funnel State
 // =============================================================================
 
+export type AspectRatio = "16:9" | "9:16" | "1:1";
+
 export interface FunnelState {
   step: FunnelStep;
   characters: Character[];
   selectedStyle: string | null;
+  aspectRatio: AspectRatio;
   scenes: Scene[];
   generationProgress: GenerationProgress | null;
   generationError: string | null;
@@ -80,6 +83,7 @@ export interface SerializableDraft {
   step: FunnelStep;
   characters: Array<Omit<Character, "originalFile">>;
   selectedStyle: string | null;
+  aspectRatio: AspectRatio;
   scenes: Scene[];
   videoUrls: string[];
 }
@@ -90,6 +94,7 @@ export type FunnelAction =
   | { type: "UPDATE_CHARACTER"; id: string; updates: Partial<Character> }
   | { type: "REMOVE_CHARACTER"; id: string }
   | { type: "SET_STYLE"; styleId: string | null }
+  | { type: "SET_ASPECT_RATIO"; aspectRatio: AspectRatio }
   | { type: "ADD_SCENE"; sceneType: SceneType; duration: SceneDuration; referencePhotoId?: string }
   | { type: "UPDATE_SCENE"; id: string; updates: Partial<Scene> }
   | { type: "REMOVE_SCENE"; id: string }

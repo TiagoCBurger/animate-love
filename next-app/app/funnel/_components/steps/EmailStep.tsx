@@ -19,35 +19,49 @@ export function EmailStep({ onVerified, onBack }: EmailStepProps) {
   const [error, setError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const verifyingRef = useRef(false);
+  const sendingRef = useRef(false);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || sendingRef.current) return;
+    sendingRef.current = true;
     setIsSending(true);
     setError("");
 
     try {
-      const supabase = createClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm?next=/funnel`,
-        },
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
 
-      if (otpError) {
-        setError(otpError.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Erro ao enviar código.");
         return;
       }
 
       setStep("otp");
+      setResendCooldown(60);
+      const interval = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } catch {
       setError("Erro ao enviar codigo. Tente novamente.");
     } finally {
       setIsSending(false);
+      sendingRef.current = false;
     }
   };
 
@@ -104,7 +118,7 @@ export function EmailStep({ onVerified, onBack }: EmailStepProps) {
       const { error: verifyError } = await supabase.auth.verifyOtp({
         email,
         token: code,
-        type: "email",
+        type: "magiclink",
       });
 
       if (verifyError) {
@@ -262,10 +276,10 @@ export function EmailStep({ onVerified, onBack }: EmailStepProps) {
                   setError("");
                   handleSendOtp(new Event("submit") as unknown as React.FormEvent);
                 }}
-                disabled={isSending}
+                disabled={isSending || resendCooldown > 0}
                 className="text-sm text-pink-400 hover:text-pink-300 transition-colors disabled:opacity-50"
               >
-                Reenviar codigo
+                {resendCooldown > 0 ? `Reenviar em ${resendCooldown}s` : "Reenviar codigo"}
               </button>
             </div>
 

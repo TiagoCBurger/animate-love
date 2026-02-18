@@ -13,11 +13,14 @@ import {
 import type { Scene } from "@/types/scene";
 import type { Character } from "@/types/funnel";
 import { FunnelShell } from "../FunnelShell";
+import { estimateImageCost, estimateVideoCost, formatCredits, canAfford, type CostsOverride } from "@/lib/costs";
 
 interface ScenePreviewStepProps {
   scenes: Scene[];
   characters: Character[];
   selectedStyle: string | null;
+  balanceCents: number;
+  costs?: CostsOverride;
   isGenerating: boolean;
   regeneratingSceneId: string | null;
   onConfirm: () => void;
@@ -30,6 +33,8 @@ export function ScenePreviewStep({
   scenes,
   characters,
   selectedStyle,
+  balanceCents,
+  costs,
   isGenerating,
   regeneratingSceneId,
   onConfirm,
@@ -239,6 +244,31 @@ export function ScenePreviewStep({
         })}
       </div>
 
+      {/* Cost breakdown */}
+      {(() => {
+        const imageCost = estimateImageCost(scenes.length, costs);
+        const videoCost = estimateVideoCost(scenes, costs);
+        const affordable = canAfford(balanceCents, videoCost);
+        return (
+          <div className="mb-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-400">Imagens ({scenes.length}x):</span>
+              <span className="text-zinc-500">{formatCredits(imageCost)} (ja pago)</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-400">Video ({totalDuration}s):</span>
+              <span className="text-white font-medium">{formatCredits(videoCost)}</span>
+            </div>
+            <div className="border-t border-zinc-800 pt-1 mt-1 flex justify-between text-sm">
+              <span className="text-zinc-400">Seu saldo:</span>
+              <span className={affordable ? "text-green-400 font-medium" : "text-red-400 font-medium"}>
+                {formatCredits(balanceCents)}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Action buttons */}
       <div className="flex gap-4">
         <Button
@@ -253,7 +283,7 @@ export function ScenePreviewStep({
 
         <Button
           onClick={onConfirm}
-          disabled={!allScenesGenerated || isGenerating}
+          disabled={!allScenesGenerated || isGenerating || !canAfford(balanceCents, estimateVideoCost(scenes, costs))}
           className="flex-1 h-14 text-lg bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white border-0 shadow-lg shadow-pink-500/25 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Sparkles className="w-5 h-5 mr-2" />
@@ -263,14 +293,6 @@ export function ScenePreviewStep({
             ? "Animar Cenas"
             : "Aguardando imagens..."}
         </Button>
-      </div>
-
-      {/* Cost warning */}
-      <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-        <p className="text-sm text-amber-200 text-center">
-          ⚠️ A animacao consome creditos. Confira se as imagens estao
-          corretas antes de prosseguir.
-        </p>
       </div>
     </FunnelShell>
   );

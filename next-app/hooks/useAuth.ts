@@ -6,16 +6,16 @@ import type { User } from "@supabase/supabase-js";
 
 interface UseAuthReturn {
   user: User | null;
-  credits: number;
+  balanceCents: number;
   isLoading: boolean;
   isAuthenticated: boolean;
   signOut: () => Promise<void>;
-  refreshCredits: () => Promise<void>;
+  refreshBalance: () => Promise<void>;
 }
 
 export function useAuth(): UseAuthReturn {
   const [user, setUser] = useState<User | null>(null);
-  const [credits, setCredits] = useState(0);
+  const [balanceCents, setBalanceCents] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function useAuth(): UseAuthReturn {
       setUser(user);
       setIsLoading(false);
       if (user) {
-        fetchCredits();
+        fetchBalance();
       }
     });
 
@@ -34,24 +34,24 @@ export function useAuth(): UseAuthReturn {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchCredits();
+        fetchBalance();
       } else {
-        setCredits(0);
+        setBalanceCents(0);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchCredits = useCallback(async () => {
+  const fetchBalance = useCallback(async () => {
     try {
       const response = await fetch("/api/credits");
       if (response.ok) {
         const data = await response.json();
-        setCredits(data.credits);
+        setBalanceCents(data.balance_cents ?? 0);
       }
     } catch {
-      // Silently fail — user may not have credits yet
+      // Silently fail — user may not have balance yet
     }
   }, []);
 
@@ -59,15 +59,15 @@ export function useAuth(): UseAuthReturn {
     const supabase = createClient();
     await supabase.auth.signOut();
     setUser(null);
-    setCredits(0);
+    setBalanceCents(0);
   }, []);
 
   return {
     user,
-    credits,
+    balanceCents,
     isLoading,
     isAuthenticated: !!user,
     signOut,
-    refreshCredits: fetchCredits,
+    refreshBalance: fetchBalance,
   };
 }

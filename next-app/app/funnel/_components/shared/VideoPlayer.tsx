@@ -7,9 +7,17 @@ import type { Scene } from "@/types/scene";
 interface VideoPlayerProps {
   videos: string[];
   scenes: Scene[];
+  aspectRatio?: "16:9" | "9:16" | "1:1";
 }
 
-export function VideoPlayer({ videos, scenes }: VideoPlayerProps) {
+const ASPECT_RATIO_CLASS: Record<string, string> = {
+  "9:16": "aspect-[9/16]",
+  "16:9": "aspect-video",
+  "1:1": "aspect-square",
+};
+
+export function VideoPlayer({ videos, scenes, aspectRatio = "9:16" }: VideoPlayerProps) {
+  const aspectClass = ASPECT_RATIO_CLASS[aspectRatio] || "aspect-video";
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -48,7 +56,7 @@ export function VideoPlayer({ videos, scenes }: VideoPlayerProps) {
 
   if (!videos.length) {
     return (
-      <div className="aspect-video bg-zinc-800 flex items-center justify-center relative">
+      <div className={`${aspectClass} bg-zinc-800 flex items-center justify-center relative`}>
         <div className="absolute inset-0 flex items-center justify-center">
           <Loader2 className="w-12 h-12 text-pink-500 animate-spin" />
         </div>
@@ -58,7 +66,7 @@ export function VideoPlayer({ videos, scenes }: VideoPlayerProps) {
 
   return (
     <div
-      className="aspect-video bg-zinc-800 relative group"
+      className={`${aspectClass} bg-zinc-800 relative group`}
       onClick={() => (isPlaying ? handlePause() : handlePlay())}
     >
       <video

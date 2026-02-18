@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCredits } from "@/lib/supabase/credits";
+import { getCredits, getBalance } from "@/lib/supabase/credits";
 
 export async function GET() {
   try {
@@ -16,9 +16,12 @@ export async function GET() {
       );
     }
 
-    const credits = await getCredits(user.id);
+    const [credits, balance_cents] = await Promise.all([
+      getCredits(user.id),
+      getBalance(user.id),
+    ]);
 
-    return NextResponse.json({ credits });
+    return NextResponse.json({ credits, balance_cents });
   } catch (error) {
     console.error("Error fetching credits:", error);
     return NextResponse.json(

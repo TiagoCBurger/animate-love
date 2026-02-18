@@ -5,22 +5,26 @@ import { Card } from "@/components/ui/card";
 import {
   Heart,
   Home,
-  User,
   Coins,
   Download,
   Share2,
   RotateCcw,
   Sparkles,
   Film,
+  LayoutDashboard,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { Scene } from "@/types/scene";
 import { STYLE_PRESETS, type StyleId } from "@/lib/constants/styles";
 import { VideoPlayer } from "../shared/VideoPlayer";
+import { formatCredits } from "@/lib/costs";
 
 interface ResultStepProps {
   scenes: Scene[];
   videoUrls: string[];
   selectedStyle: string | null;
+  aspectRatio?: "16:9" | "9:16" | "1:1";
+  balanceCents?: number;
   onCreateNew: () => void;
 }
 
@@ -28,8 +32,11 @@ export function ResultStep({
   scenes,
   videoUrls,
   selectedStyle,
+  aspectRatio,
+  balanceCents,
   onCreateNew,
 }: ResultStepProps) {
+  const router = useRouter();
   const totalDuration = scenes.reduce((sum, s) => sum + s.duration, 0);
 
   return (
@@ -37,25 +44,29 @@ export function ResultStep({
       <header className="sticky top-0 z-40 bg-[#09090b]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <button className="flex items-center gap-2 text-zinc-400 hover:text-white transition">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="flex items-center gap-2 text-zinc-400 hover:text-white transition"
+            >
               <Home className="w-5 h-5" />
               <span className="hidden sm:inline text-sm">Meus Projetos</span>
             </button>
 
-            <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="flex items-center gap-2 hover:opacity-80 transition"
+            >
               <Heart className="w-5 h-5 text-pink-500 fill-pink-500" />
               <span className="font-semibold text-white">Animalove</span>
-            </div>
+            </button>
 
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700">
-                <Coins className="w-4 h-4 text-amber-400" />
-                <span className="text-sm font-medium text-white">5</span>
-              </div>
-
-              <button className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center">
-                <User className="w-5 h-5 text-white" />
-              </button>
+              {balanceCents !== undefined && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700">
+                  <Coins className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-medium text-white">{formatCredits(balanceCents)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -76,7 +87,7 @@ export function ResultStep({
           </div>
 
           <Card className="bg-zinc-900/50 border-zinc-800 rounded-3xl overflow-hidden mb-8">
-            <VideoPlayer videos={videoUrls} scenes={scenes} />
+            <VideoPlayer videos={videoUrls} scenes={scenes} aspectRatio={aspectRatio} />
 
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -121,7 +132,7 @@ export function ResultStep({
             </div>
           </Card>
 
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-2 gap-4 mb-6">
             <Button className="h-14 text-lg font-semibold bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white border-0 rounded-xl">
               <Download className="w-5 h-5 mr-2" />
               Baixar Video
@@ -135,12 +146,20 @@ export function ResultStep({
             </Button>
           </div>
 
-          <div className="text-center">
+          <div className="flex flex-col items-center gap-3 pt-2">
+            <Button
+              onClick={() => router.push("/dashboard")}
+              variant="outline"
+              className="h-12 px-8 font-semibold bg-zinc-800/50 hover:bg-zinc-800 text-white border-zinc-700 rounded-full"
+            >
+              <LayoutDashboard className="w-5 h-5 mr-2" />
+              Ver Meus Projetos
+            </Button>
             <button
               onClick={onCreateNew}
-              className="inline-flex items-center gap-2 text-zinc-400 hover:text-pink-400 transition"
+              className="inline-flex items-center gap-2 text-zinc-500 hover:text-pink-400 transition text-sm"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-3.5 h-3.5" />
               Criar nova historia
             </button>
           </div>

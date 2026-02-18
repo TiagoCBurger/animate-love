@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ArrowLeft, Heart } from "lucide-react";
 import type { FunnelStep } from "@/types/funnel";
 
@@ -37,10 +38,13 @@ export function FunnelShell({ step, onBack, children }: FunnelShellProps) {
           ) : (
             <div />
           )}
-          <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 hover:opacity-80 transition"
+          >
             <Heart className="w-5 h-5 text-pink-500 fill-pink-500" />
             <span className="font-semibold text-white">Animalove</span>
-          </div>
+          </Link>
         </div>
 
         {/* Step indicator */}

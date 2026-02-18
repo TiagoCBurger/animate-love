@@ -2,15 +2,18 @@
 
 import { useCallback, useRef } from "react";
 import type { Scene } from "@/types/scene";
-import type { Character, GenerationProgress } from "@/types/funnel";
+import type { Character, GenerationProgress, AspectRatio } from "@/types/funnel";
 import type { StyleId } from "@/lib/constants/styles";
 import { STYLE_PRESETS } from "@/lib/constants/styles";
 import { dataUrlToBlob } from "./useImageCrop";
+import { estimateImageCost, estimateVideoCost, type CostsOverride } from "@/lib/costs";
 
 interface UseGenerationPipelineOptions {
   characters: Character[];
   scenes: Scene[];
   selectedStyle: string | null;
+  aspectRatio: AspectRatio;
+  costs?: CostsOverride;
   onUpdateCharacter: (id: string, updates: Partial<Character>) => void;
   setScenes: (scenes: Scene[]) => void;
   setGenerationProgress: (progress: GenerationProgress | null) => void;
@@ -45,17 +48,20 @@ async function generateStyledImage(imageUrl: string, style: string): Promise<str
 async function generateSceneImage(
   scenePrompt: string,
   characters: Array<{ name: string; description: string; styledUrl: string }>,
-  style: string
+  style: string,
+  aspectRatio: AspectRatio = "9:16"
 ): Promise<string> {
-  // Build character descriptions for the scene (if any)
+  // Build detailed character manifest with explicit role assignment
+  // Using "PROTAGONIST" labeling to enforce character hierarchy
+  const characterCount = characters.length;
   const charDescs = characters.length > 0
-    ? characters.map((c) => `${c.name} (${c.description})`).join(", ")
+    ? characters.map((c, i) => `PROTAGONIST_${i + 1}: "${c.name}" (${c.description})`).join(" | ")
     : null;
 
-  // Compose final prompt: Characters (if any) + Scene description
-  // The API will add the style preset automatically
+  // Compose prompt with strict character constraints and trait fidelity
+  // Explicit negative instructions prevent model from inventing or modifying characters
   const fullPrompt = charDescs
-    ? `Characters in scene: ${charDescs}. ${scenePrompt}`
+    ? `[CAST LOCK: EXACTLY ${characterCount} protagonist(s)] PROTAGONISTS: ${charDescs}. [SCENE]: ${scenePrompt}. [CHARACTER FIDELITY - CRITICAL]: Reproduce protagonists with 100% trait accuracy from reference images. DO NOT modify, alter, or reinterpret any physical features. Same face structure, same proportions, same colors, same distinctive marks. [FORBIDDEN]: No new main characters, no trait changes, no style reinterpretation of character features. Background extras must be blurred/silhouetted only.`
     : scenePrompt;
 
   // Collect all styled image URLs from referenced characters
@@ -86,6 +92,7 @@ async function generateSceneImage(
     imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     prompt: fullPrompt,
     style,
+    aspectRatio,
   };
 
   console.log("[generateSceneImage] Request body:", JSON.stringify(requestBody, null, 2));
@@ -106,15 +113,45 @@ async function generateVideoWithKling25(
   prompt: string,
   duration: string
 ): Promise<string> {
-  // Build enhanced prompt with character context
+  // Build enhanced prompt with strict trait preservation for video animation
+  // Video prompts focus on motion while maintaining exact character fidelity
+  const characterCount = characters.length;
   let enhancedPrompt = prompt;
   if (characters.length > 0) {
     const characterDescs = characters
-      .map((char) => `${char.name} (${char.description})`)
-      .join(", ");
-    enhancedPrompt = `Characters: ${characterDescs}. Scene: ${prompt}. Cinematic quality, smooth animation, maintain character consistency.`;
+      .map((char, i) => `PROTAGONIST_${i + 1}: "${char.name}" (${char.description})`)
+      .join(" | ");
+    enhancedPrompt = `[VIDEO ANIMATION - CHARACTER FIDELITY MODE]
+
+[PROTAGONISTS]: ${characterCount} character(s): ${characterDescs}
+
+[ACTION]: ${prompt}
+
+[TRAIT PRESERVATION - CRITICAL]:
+- Character faces must remain IDENTICAL throughout animation
+- NO morphing, warping, or distortion of facial features
+- Maintain exact proportions, colors, and distinctive marks
+- Characters must be recognizable in every single frame
+
+[ANIMATION RULES]:
+- Subtle natural movements: breathing, blinking, gentle expressions
+- Smooth fluid motion without altering character structure
+- Background/environment may animate freely
+- Protagonists remain focal point
+
+[FORBIDDEN]:
+- Face morphing or feature drift
+- Body proportion changes
+- Color shifting on characters
+- Introducing new characters`;
   } else {
-    enhancedPrompt = `${prompt}. Cinematic quality, smooth animation.`;
+    enhancedPrompt = `[VIDEO ANIMATION]
+[ACTION]: ${prompt}
+
+[RULES]:
+- Natural ambient movement throughout scene
+- Cinematic quality, smooth fluid animation
+- Maintain visual consistency with source image`;
   }
 
   // Start async video generation with Kling 2.5
@@ -171,6 +208,8 @@ export function useGenerationPipeline({
   characters,
   scenes,
   selectedStyle,
+  aspectRatio,
+  costs,
   onUpdateCharacter,
   setScenes,
   setGenerationProgress,
@@ -318,7 +357,8 @@ export function useGenerationPipeline({
         sourceImageUrl = await generateSceneImage(
           scene.prompt,
           sceneChars.map((c) => ({ name: c.name, description: c.description, styledUrl: c.styledUrl })),
-          selectedStyle!
+          selectedStyle!,
+          aspectRatio
         );
 
         updatedScenes[i] = { ...updatedScenes[i], generatedImageUrl: sourceImageUrl };
@@ -391,11 +431,15 @@ export function useGenerationPipeline({
       });
 
       try {
+        const styleName = selectedStyle
+          ? selectedStyle.charAt(0).toUpperCase() + selectedStyle.slice(1)
+          : "Projeto";
         await fetch("/api/generations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             style: selectedStyle,
+            aspectRatio,
             characters: uploadedCharacters.map((c) => ({
               name: c.name,
               description: c.description,
@@ -406,6 +450,8 @@ export function useGenerationPipeline({
               imageUrl: s.generatedImageUrl,
             })),
             videoUrls: generatedVideoUrls,
+            name: `${styleName} - ${new Date().toLocaleDateString("pt-BR")}`,
+            thumbnailUrl: updatedScenes[0]?.generatedImageUrl || null,
           }),
         });
       } catch (err) {
@@ -434,6 +480,7 @@ export function useGenerationPipeline({
     characters,
     scenes,
     selectedStyle,
+    aspectRatio,
     onUpdateCharacter,
     setScenes,
     setGenerationProgress,
@@ -450,6 +497,15 @@ export function useGenerationPipeline({
     const activeCharacters = characters.filter((c) => c.originalPreview);
 
     try {
+      // Consume balance for image generation
+      const imageCost = estimateImageCost(scenes.length, costs);
+      const res = await fetch("/api/balance/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount_cents: imageCost, type: "image_generation" }),
+      });
+      if (!res.ok) throw new Error("Saldo insuficiente para gerar imagens");
+
       // Local maps to track URLs generated during this pipeline run
       const localUploadedUrls: Record<string, string> = {};
       const localStyledUrls: Record<string, string> = {};
@@ -549,7 +605,8 @@ export function useGenerationPipeline({
         const sourceImageUrl = await generateSceneImage(
           scene.prompt,
           sceneChars.map((c) => ({ name: c.name, description: c.description, styledUrl: c.styledUrl })),
-          selectedStyle!
+          selectedStyle!,
+          aspectRatio
         );
 
         updatedScenes[i] = { ...updatedScenes[i], generatedImageUrl: sourceImageUrl };
@@ -575,6 +632,8 @@ export function useGenerationPipeline({
     characters,
     scenes,
     selectedStyle,
+    aspectRatio,
+    costs,
     onUpdateCharacter,
     setScenes,
     setGenerationProgress,
@@ -590,6 +649,15 @@ export function useGenerationPipeline({
     const generatedVideoUrls: string[] = [];
 
     try {
+      // Consume balance for video generation
+      const videoCost = estimateVideoCost(scenes, costs);
+      const res = await fetch("/api/balance/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount_cents: videoCost, type: "video_generation" }),
+      });
+      if (!res.ok) throw new Error("Saldo insuficiente para gerar videos");
+
       setGenerationProgress({
         stage: "generating-videos",
         currentScene: 0,
@@ -674,11 +742,15 @@ export function useGenerationPipeline({
 
       // Save generation and consume credit
       try {
+        const styleName = selectedStyle
+          ? selectedStyle.charAt(0).toUpperCase() + selectedStyle.slice(1)
+          : "Projeto";
         await fetch("/api/generations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             style: selectedStyle,
+            aspectRatio,
             characters: uploadedCharacters.map((c) => ({
               name: c.name,
               description: c.description,
@@ -689,6 +761,8 @@ export function useGenerationPipeline({
               imageUrl: s.generatedImageUrl,
             })),
             videoUrls: generatedVideoUrls,
+            name: `${styleName} - ${new Date().toLocaleDateString("pt-BR")}`,
+            thumbnailUrl: updatedScenes[0]?.generatedImageUrl || null,
           }),
         });
       } catch (err) {
@@ -717,6 +791,8 @@ export function useGenerationPipeline({
     characters,
     scenes,
     selectedStyle,
+    aspectRatio,
+    costs,
     setScenes,
     setGenerationProgress,
     setGenerationError,
@@ -817,7 +893,8 @@ export function useGenerationPipeline({
       const newImageUrl = await generateSceneImage(
         scene.prompt,
         sceneChars.map((c) => ({ name: c.name, description: c.description, styledUrl: c.styledUrl })),
-        selectedStyle!
+        selectedStyle!,
+        aspectRatio
       );
 
       // Update only this scene
@@ -848,6 +925,7 @@ export function useGenerationPipeline({
     characters,
     scenes,
     selectedStyle,
+    aspectRatio,
     onUpdateCharacter,
     setScenes,
     setGenerationProgress,

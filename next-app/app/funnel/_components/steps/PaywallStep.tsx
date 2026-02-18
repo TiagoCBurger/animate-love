@@ -2,45 +2,60 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { PLANS, type PlanId } from "@/lib/abacatepay/plans";
 import { ArrowLeft, Check, Crown, Sparkles, Zap } from "lucide-react";
+import { formatCredits, formatBRL } from "@/lib/costs";
+
+export interface PaywallPlan {
+  id: string;
+  name: string;
+  credits: number;
+  bonusCredits: number;
+  totalCredits: number;
+  priceCents: number;
+  description: string;
+}
 
 interface PaywallStepProps {
-  onSelectPlan: (planId: PlanId) => void;
+  plans: PaywallPlan[];
+  onSelectPlan: (planId: string) => void;
   onBack: () => void;
   isLoading: boolean;
 }
 
-const PLAN_ICONS: Record<PlanId, React.ReactNode> = {
-  plan_1: <Zap className="w-6 h-6" />,
-  plan_3: <Sparkles className="w-6 h-6" />,
-  plan_5: <Crown className="w-6 h-6" />,
-};
+const PLAN_ICONS = [
+  <Zap key="zap" className="w-6 h-6" />,
+  <Sparkles key="sparkles" className="w-6 h-6" />,
+  <Crown key="crown" className="w-6 h-6" />,
+];
 
-const PLAN_COLORS: Record<PlanId, { bg: string; border: string; badge: string }> = {
-  plan_1: {
+const PLAN_COLORS = [
+  {
     bg: "from-zinc-800 to-zinc-900",
     border: "border-zinc-700",
     badge: "bg-zinc-700",
   },
-  plan_3: {
+  {
     bg: "from-pink-950/50 to-zinc-900",
     border: "border-pink-500/50",
     badge: "bg-pink-600",
   },
-  plan_5: {
+  {
     bg: "from-amber-950/30 to-zinc-900",
     border: "border-amber-500/50",
     badge: "bg-amber-600",
   },
-};
+];
 
-export function PaywallStep({ onSelectPlan, onBack, isLoading }: PaywallStepProps) {
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>("plan_3");
+export function PaywallStep({ plans, onSelectPlan, onBack, isLoading }: PaywallStepProps) {
+  // Default to second plan (popular) if available
+  const defaultPlanId = plans.length >= 2 ? plans[1].id : plans[0]?.id ?? "";
+  const [selectedPlanId, setSelectedPlanId] = useState(defaultPlanId);
+
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSelectPlan(selectedPlan);
+    onSelectPlan(selectedPlanId);
   };
 
   return (
@@ -65,16 +80,16 @@ export function PaywallStep({ onSelectPlan, onBack, isLoading }: PaywallStepProp
 
         {/* Plan cards */}
         <div className="grid gap-4 md:grid-cols-3 mb-8">
-          {(Object.keys(PLANS) as PlanId[]).map((planId) => {
-            const plan = PLANS[planId];
-            const colors = PLAN_COLORS[planId];
-            const isSelected = selectedPlan === planId;
-            const isPopular = planId === "plan_3";
+          {plans.map((plan, index) => {
+            const colors = PLAN_COLORS[index] || PLAN_COLORS[0];
+            const icon = PLAN_ICONS[index] || PLAN_ICONS[0];
+            const isSelected = selectedPlanId === plan.id;
+            const isPopular = index === 1; // second plan is "popular"
 
             return (
               <button
-                key={planId}
-                onClick={() => setSelectedPlan(planId)}
+                key={plan.id}
+                onClick={() => setSelectedPlanId(plan.id)}
                 className={`relative rounded-2xl p-6 text-left transition-all border-2 bg-gradient-to-b ${colors.bg} ${
                   isSelected
                     ? "border-pink-500 scale-[1.02] shadow-lg shadow-pink-500/20"
@@ -91,29 +106,35 @@ export function PaywallStep({ onSelectPlan, onBack, isLoading }: PaywallStepProp
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                     isSelected ? "bg-pink-500/20 text-pink-400" : "bg-zinc-800 text-zinc-400"
                   }`}>
-                    {PLAN_ICONS[planId]}
+                    {icon}
                   </div>
                   <span className="font-semibold text-lg">{plan.name}</span>
                 </div>
 
                 <div className="mb-4">
                   <span className="text-3xl font-bold">
-                    R${(plan.price / 100).toFixed(2).replace(".", ",")}
+                    R${(plan.priceCents / 100).toFixed(2).replace(".", ",")}
                   </span>
                 </div>
 
                 <ul className="space-y-2 text-sm text-zinc-400">
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
-                    {plan.credits} {plan.credits === 1 ? "geração" : "gerações"} de vídeo
+                    {formatCredits(plan.credits)}
+                  </li>
+                  {plan.bonusCredits > 0 && (
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+                      +{formatCredits(plan.bonusCredits)} gratis
+                    </li>
+                  )}
+                  <li className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    {formatCredits(plan.totalCredits)} no total
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
-                    +{plan.bonus} {plan.bonus === 1 ? "bônus" : "bônus"} grátis
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
-                    {plan.totalCredits} créditos no total
+                    {plan.description}
                   </li>
                 </ul>
 
@@ -131,10 +152,14 @@ export function PaywallStep({ onSelectPlan, onBack, isLoading }: PaywallStepProp
         <form onSubmit={handleSubmit} className="max-w-md mx-auto">
           <Button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || !selectedPlan}
             className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white border-0 rounded-xl shadow-lg shadow-pink-500/25 transition-all disabled:opacity-50"
           >
-            {isLoading ? "Processando..." : `Pagar R$${(PLANS[selectedPlan].price / 100).toFixed(2).replace(".", ",")}`}
+            {isLoading
+              ? "Processando..."
+              : selectedPlan
+              ? `Pagar R$${(selectedPlan.priceCents / 100).toFixed(2).replace(".", ",")}`
+              : "Selecione um plano"}
           </Button>
 
           <p className="text-xs text-center text-zinc-500 mt-4">

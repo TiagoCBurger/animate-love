@@ -35,34 +35,25 @@ async function persistToR2(tempUrl: string, folder: string = "styled"): Promise<
 }
 
 // Style presets matching the funnel page
+// CHARACTER_PREFIX is prepended to all character styling prompts
+const CHARACTER_PREFIX = "Character portrait for animated story. Create a detailed stylized version of this character that can be used consistently across multiple scenes. Focus on capturing the character's unique identifying features, expression, and personality.";
+
 const STYLE_PRESETS = {
-  romantic: {
-    prompt:
-      "romantic style, soft lighting, warm colors, dreamy atmosphere, bokeh background, golden hour, tender, emotional, cinematic quality. IMPORTANT: maintain original skin tone and facial features exactly as in the reference image",
-  },
-  anime: {
-    prompt:
-      "anime style, studio ghibli inspired, detailed anime art, vibrant colors, clean lines, sparkles, cherry blossoms. IMPORTANT: maintain original skin tone and facial features exactly as in the reference image",
-  },
   pixar: {
     prompt:
-      "pixar style 3d render, disney animation style, big expressive eyes, smooth skin, vibrant colors, studio lighting, high quality 3d animation. IMPORTANT: maintain original skin tone and facial features exactly as in the reference image",
+      `${CHARACTER_PREFIX} Style: Pixar/Disney 3D animation render with big expressive eyes, smooth stylized features, vibrant saturated colors, professional studio lighting, high quality 3D character design. CRITICAL: Preserve the exact appearance, proportions, fur color/pattern (if pet), skin tone, and distinctive features from the reference image. The character must be instantly recognizable.`,
   },
-  watercolor: {
+  comic: {
     prompt:
-      "watercolor painting, soft brushstrokes, pastel colors, artistic, delicate, flowing paint, paper texture, beautiful watercolor art. IMPORTANT: maintain original skin tone and facial features exactly as in the reference image",
-  },
-  vintage: {
-    prompt:
-      "vintage photograph style, 1970s aesthetic, film grain, warm vintage tones, nostalgic atmosphere, soft focus, light leaks, analog photography feel. IMPORTANT: maintain original skin tone and facial features exactly as in the reference image",
+      `${CHARACTER_PREFIX} Style: Comic book art style inspired by Spider-Verse animation as the dominant visual style, bold black ink outlines with varying line weights, Ben-Day dots halftone patterns, cel-shading with cinematic color grading, warm and natural color palette, muted earthy tones, golden hour warm lighting influence, accurate naturalistic skin tones, rich warm shadows with soft amber undertones, hand-drawn sketch texture overlaid on clean shapes, cross-hatching in shadow areas, subtle off-register printing effect, kinetic motion lines, graphic novel panel aesthetic, visible brushstroke textures, analog film grain overlay, atmospheric depth, no teal color grading, no green cast, no cool color dominance, characters with exaggerated caricature features, strong and defined facial structure, bold expressive eyes with thick ink outlines, exaggerated jawlines and cheekbones, dramatic and expressive facial expressions, comic book anatomy with defined muscle lines, thick expressive eyebrows, hand-inked character details, editorial cartoon influence on facial features, subtle Pixar animation influence on character softness and volume, slightly rounded and smooth facial geometry beneath the ink lines, soft subsurface skin quality reminiscent of CGI animation, warm appealing character design with Pixar-like charm and expressiveness, 3D volume suggestion under 2D comic rendering, Pixar influence is secondary and subtle never dominant. CRITICAL: Preserve the exact appearance, proportions, fur color/pattern (if pet), skin tone, and distinctive features from the reference image. The character must be instantly recognizable.`,
   },
   oilpainting: {
     prompt:
-      "oil painting masterpiece, renaissance style, dramatic lighting, rich colors, visible brushstrokes, classical art, museum quality. IMPORTANT: maintain original skin tone and facial features exactly as in the reference image",
+      `${CHARACTER_PREFIX} Style: Classical oil painting masterpiece with dramatic chiaroscuro lighting, rich deep saturated colors, bold visible expressive brushstrokes that emphasize the character's defining features. Exaggerate and enhance the most distinctive traits of the character - prominent facial features, unique markings, characteristic expressions. Strong impasto technique with thick textured paint on key features like eyes, nose, and any unique physical characteristics. Renaissance master quality with museum-worthy dramatic composition. Deep shadows and luminous highlights that sculpt the character's form. Each brushstroke should reinforce the character's personality and most recognizable attributes. CRITICAL: Preserve AND EMPHASIZE the exact appearance, proportions, fur color/pattern (if pet), skin tone, and distinctive features from the reference image. Accentuate what makes this character unique and memorable. The character must be instantly recognizable with their defining traits boldly expressed through the painterly style.`,
   },
-  lego: {
+  watercolor: {
     prompt:
-      "LEGO brick style, colorful plastic blocks construction, toy photography aesthetic, vibrant primary colors, playful blocky shapes, smooth plastic texture, studio lighting, high saturation, sharp edges, miniature LEGO world. IMPORTANT: maintain original skin tone and facial features exactly as in the reference image",
+      `${CHARACTER_PREFIX} Style: Elegant watercolor painting with subtle Pixar-inspired caricature influence. Slightly exaggerated and stylized facial features with charming appeal - larger expressive eyes, softly rounded forms, and endearing proportions that highlight the character's personality. Soft artistic brushstrokes with delicate wet-on-wet technique creating beautiful color bleeds and gradients. Pastel and muted color palette with occasional vibrant accents. Visible paper texture showing through transparent washes, loose expressive edges that fade into white space. The character should feel like a Pixar character painted in watercolor - warm, appealing, and full of life with romantic dreamy atmosphere. Layered translucent washes building depth and form with a touch of whimsy. CRITICAL: Preserve the essential appearance, fur color/pattern (if pet), skin tone, and distinctive features from the reference image while adding subtle caricature charm. The character must be instantly recognizable with their defining traits expressed through flowing watercolor aesthetic and gentle stylization.`,
   },
 } as const;
 
@@ -83,7 +74,7 @@ type StylePreset = keyof typeof STYLE_PRESETS;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action = "style", imageUrl, imageUrls, style, taskId, prompt } = body;
+    const { action = "style", imageUrl, imageUrls, style, taskId, prompt, aspectRatio } = body;
 
     switch (action) {
       case "style": {
@@ -164,10 +155,55 @@ export async function POST(request: NextRequest) {
             ? [imageUrl]
             : [];
 
-        // Build the scene prompt with style
+        // Build the scene prompt with strict character constraints and trait fidelity
+        // Using structured prompt engineering with explicit negative instructions
+        const characterCount = refUrls.length;
+
+        // SCENE_CONTEXT with character fidelity as top priority
+        const SCENE_CONTEXT = `[SCENE GENERATION - STRICT CHARACTER FIDELITY MODE]
+
+RULE #1 - CHARACTER TRAIT PRESERVATION (HIGHEST PRIORITY):
+- Copy character appearance EXACTLY as shown in reference images
+- DO NOT modify, reinterpret, or stylize character features differently
+- Same face structure, same eye shape, same nose, same proportions
+- Same fur pattern/skin tone, same colors, same distinctive marks
+- The scene style applies to ENVIRONMENT and LIGHTING only, NOT to character traits
+
+RULE #2 - FIXED CAST:
+- Reference images show the ONLY protagonists allowed
+- DO NOT create, invent, or add any new main characters
+- Background extras must be blurred silhouettes only`;
+
         const combinedPrompt = refUrls.length > 0
-          ? `Style: ${stylePreset.prompt}. Scene: ${prompt}. Maintain the exact character appearance and features from all reference images. All characters from the reference images must appear together in the scene.`
-          : `Style: ${stylePreset.prompt}. Scene: ${prompt}.`;
+          ? `${SCENE_CONTEXT}
+
+[PROTAGONISTS]: Exactly ${characterCount} character(s) - reproduce with 100% visual fidelity from references.
+
+[SCENE DESCRIPTION]: ${prompt}
+
+[ENVIRONMENT STYLE ONLY]: ${stylePreset.prompt}
+(Apply style to background, lighting, atmosphere - NOT to character physical traits)
+
+[CHARACTER FIDELITY CHECKLIST]:
+✓ Face structure: IDENTICAL to reference
+✓ Body proportions: IDENTICAL to reference
+✓ Colors (fur/skin/hair): IDENTICAL to reference
+✓ Distinctive features: IDENTICAL to reference
+✓ Expression style: Consistent with reference character personality
+
+[FORBIDDEN]:
+✗ Modifying character facial features
+✗ Changing character proportions or body type
+✗ Altering character colors or patterns
+✗ Adding new prominent characters
+✗ Reinterpreting character design
+
+[COMPOSITION]: Cinematic framing, professional lighting, protagonists as clear focal point with supporting environment.`
+          : `[SCENE DESCRIPTION]: ${prompt}
+
+[VISUAL STYLE]: ${stylePreset.prompt}
+
+[COMPOSITION]: Cinematic framing, professional lighting, high quality illustration.`;
 
         console.log("=== [generate-with-reference] DEBUG START ===");
         console.log("[generate-with-reference] Raw body.imageUrls:", JSON.stringify(imageUrls));
@@ -183,16 +219,18 @@ export async function POST(request: NextRequest) {
 
         // Use Flux 2 Pro Image-to-Image when reference images exist (supports 1-8 input_urls natively)
         // Use Flux 2 Pro Text-to-Image when no reference images
+        const sceneAspectRatio = aspectRatio || "9:16";
+
         const result = refUrls.length > 0
           ? await generateWithFlux2ImageToImage({
               imageUrl: refUrls,
               prompt: combinedPrompt,
-              aspectRatio: "9:16",
+              aspectRatio: sceneAspectRatio,
               resolution: "1K",
             })
           : await generateWithFlux2({
               prompt: combinedPrompt,
-              aspectRatio: "9:16",
+              aspectRatio: sceneAspectRatio,
               resolution: "1K",
             });
 

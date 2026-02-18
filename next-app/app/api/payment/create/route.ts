@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createBilling, PLANS, PlanId } from "@/lib/abacatepay";
+import { createBilling } from "@/lib/abacatepay";
+import { getPlanById } from "@/lib/supabase/config";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { planId, customer } = body;
 
-    // Validate plan
-    if (!planId || !PLANS[planId as PlanId]) {
+    if (!planId) {
+      return NextResponse.json(
+        { error: "Invalid plan selected" },
+        { status: 400 }
+      );
+    }
+
+    // Look up plan from DB (falls back to static defaults)
+    const plan = await getPlanById(planId);
+    if (!plan) {
       return NextResponse.json(
         { error: "Invalid plan selected" },
         { status: 400 }
@@ -22,9 +31,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create billing
+    // Create billing with plan data from DB
     const billing = await createBilling({
-      planId: planId as PlanId,
+      planId,
+      plan: {
+        id: plan.id,
+        name: plan.name,
+        credits: plan.credits,
+        bonusCredits: plan.bonusCredits,
+        totalCredits: plan.totalCredits,
+        price: plan.priceCents,
+        description: plan.description,
+      },
       customer: {
         name: customer.name,
         email: customer.email,

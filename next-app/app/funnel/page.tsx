@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useFunnelState } from "@/hooks/useFunnelState";
 import { useStylePreview } from "@/hooks/useStylePreview";
 import { useGenerationPipeline } from "@/hooks/useGenerationPipeline";
 import { useAuth } from "@/hooks/useAuth";
 import { createScene } from "@/types/scene";
-import type { PlanId } from "@/lib/abacatepay/plans";
+import { estimateImageCost, type CostsOverride } from "@/lib/costs";
+import type { PaywallPlan } from "./_components/steps/PaywallStep";
 import { LandingStep } from "./_components/steps/LandingStep";
 import { CharactersStep } from "./_components/steps/CharactersStep";
 import { StyleStep } from "./_components/steps/StyleStep";
@@ -28,6 +29,7 @@ export default function FunnelPage() {
     updateCharacter,
     removeCharacter,
     setStyle,
+    setAspectRatio,
     addScene,
     updateScene,
     removeScene,
@@ -41,10 +43,52 @@ export default function FunnelPage() {
     clearDraft,
   } = useFunnelState();
 
-  const { isAuthenticated, user, credits, refreshCredits } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user, balanceCents, refreshBalance } = useAuth();
   const searchParams = useSearchParams();
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // DB-driven config
+  const [configPlans, setConfigPlans] = useState<PaywallPlan[]>([]);
+  const [configCosts, setConfigCosts] = useState<CostsOverride | undefined>(undefined);
+
+  // Fetch config (costs + plans) on mount
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.costs) {
+          setConfigCosts(data.costs);
+        }
+        if (data.plans && Array.isArray(data.plans)) {
+          setConfigPlans(
+            data.plans.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              credits: p.credits,
+              bonusCredits: p.bonusCredits,
+              totalCredits: p.totalCredits,
+              priceCents: p.priceCents,
+              description: p.description,
+            }))
+          );
+        }
+      })
+      .catch((err) => console.warn("Failed to fetch config:", err));
+  }, []);
+
+  // Load draft only for non-authenticated users (once auth resolves)
+  const hasTriedDraft = useRef(false);
+  useEffect(() => {
+    if (authLoading || hasTriedDraft.current) return;
+    hasTriedDraft.current = true;
+    if (!isAuthenticated) {
+      loadDraft();
+    } else {
+      // Authenticated: clear stale draft so next visit starts fresh
+      clearDraft();
+    }
+  }, [authLoading, isAuthenticated, loadDraft, clearDraft]);
 
   // Handle return from AbacatePay
   useEffect(() => {
@@ -54,12 +98,12 @@ export default function FunnelPage() {
     }
   }, [searchParams]);
 
-  // Refresh credits when user is authenticated (e.g. after login via magic link)
+  // Refresh balance when user is authenticated (e.g. after login via magic link)
   useEffect(() => {
     if (isAuthenticated) {
-      refreshCredits();
+      refreshBalance();
     }
-  }, [isAuthenticated, refreshCredits]);
+  }, [isAuthenticated, refreshBalance]);
 
   // Auto-redirect when user is authenticated and on email-verification step
   useEffect(() => {
@@ -68,12 +112,12 @@ export default function FunnelPage() {
     }
   }, [state.step, isAuthenticated, setStep]);
 
-  // Auto-redirect from paywall when user already has credits
+  // Auto-redirect from paywall when user already has balance
   useEffect(() => {
-    if (state.step === "paywall" && isAuthenticated && credits >= 1) {
+    if (state.step === "paywall" && isAuthenticated && balanceCents >= estimateImageCost(state.scenes.length || 1, configCosts)) {
       setStep("scenes");
     }
-  }, [state.step, isAuthenticated, credits, setStep]);
+  }, [state.step, isAuthenticated, balanceCents, state.scenes.length, configCosts, setStep]);
 
   const { generateAllPreviews } = useStylePreview({
     characters: state.characters,
@@ -87,6 +131,8 @@ export default function FunnelPage() {
     characters: state.characters,
     scenes: state.scenes,
     selectedStyle: state.selectedStyle,
+    aspectRatio: state.aspectRatio,
+    costs: configCosts,
     onUpdateCharacter: updateCharacter,
     setScenes,
     setGenerationProgress,
@@ -114,8 +160,8 @@ export default function FunnelPage() {
   const handleContinueToScenes = useCallback(() => {
     if (!state.selectedStyle) return;
 
-    // Only generate style previews for authenticated users with credits
-    if (isAuthenticated && credits >= 1) {
+    // Only generate style previews for authenticated users with balance
+    if (isAuthenticated && balanceCents > 0) {
       generateAllPreviews();
     }
 
@@ -126,7 +172,7 @@ export default function FunnelPage() {
     }
 
     setStep("scenes");
-  }, [state.selectedStyle, state.scenes.length, state.characters, isAuthenticated, credits, generateAllPreviews, setScenes, setStep]);
+  }, [state.selectedStyle, state.scenes.length, state.characters, isAuthenticated, balanceCents, generateAllPreviews, setScenes, setStep]);
 
   const handleStartProcessing = useCallback(() => {
     // Not authenticated → go to email verification first
@@ -136,24 +182,25 @@ export default function FunnelPage() {
       return;
     }
 
-    // Authenticated but no credits → go to paywall
-    if (credits < 1) {
+    // Authenticated but insufficient balance → go to paywall
+    const imageCost = estimateImageCost(state.scenes.length, configCosts);
+    if (balanceCents < imageCost) {
       saveDraft();
       setStep("paywall");
       return;
     }
 
-    // Authenticated with credits → generate
+    // Authenticated with enough balance → generate
     setGenerationProgress(null);
     setGenerationError(null);
     setStep("scene-preview");
     generateSceneImagesOnly();
-  }, [isAuthenticated, credits, saveDraft, setStep, setGenerationProgress, setGenerationError, generateSceneImagesOnly]);
+  }, [isAuthenticated, balanceCents, state.scenes.length, configCosts, saveDraft, setStep, setGenerationProgress, setGenerationError, generateSceneImagesOnly]);
 
   const handleEmailVerified = useCallback(() => {
-    refreshCredits();
+    refreshBalance();
     setStep("paywall");
-  }, [refreshCredits, setStep]);
+  }, [refreshBalance, setStep]);
 
   const handleConfirmAndAnimate = useCallback(() => {
     if (!isAuthenticated) {
@@ -162,18 +209,12 @@ export default function FunnelPage() {
       return;
     }
 
-    if (credits < 1) {
-      saveDraft();
-      setStep("paywall");
-      return;
-    }
-
     setGenerationProgress(null);
     setGenerationError(null);
     setVideoUrls([]);
     setStep("loading");
     generateVideosOnly();
-  }, [isAuthenticated, credits, saveDraft, setStep, setGenerationProgress, setGenerationError, setVideoUrls, generateVideosOnly]);
+  }, [isAuthenticated, saveDraft, setStep, setGenerationProgress, setGenerationError, setVideoUrls, generateVideosOnly]);
 
   const handleRegenerateScene = useCallback(async (sceneId: string) => {
     setRegeneratingSceneId(sceneId);
@@ -189,7 +230,7 @@ export default function FunnelPage() {
     runPipeline();
   }, [setGenerationError, runPipeline]);
 
-  const handleSelectPlan = useCallback(async (planId: PlanId) => {
+  const handleSelectPlan = useCallback(async (planId: string) => {
     setPaymentLoading(true);
     try {
       saveDraft();
@@ -235,7 +276,7 @@ export default function FunnelPage() {
           </p>
           <Button
             onClick={() => {
-              refreshCredits();
+              refreshBalance();
               setPaymentSuccess(false);
               setStep("scenes");
             }}
@@ -251,7 +292,7 @@ export default function FunnelPage() {
   return (
     <div className="min-h-screen bg-[#09090b] text-white">
       {state.step === "landing" && (
-        <LandingStep onStart={handleStartCharacters} />
+        <LandingStep onStart={handleStartCharacters} isAuthenticated={isAuthenticated} />
       )}
 
       {state.step === "characters" && (
@@ -281,6 +322,10 @@ export default function FunnelPage() {
           scenes={state.scenes}
           characters={state.characters}
           selectedStyle={state.selectedStyle}
+          aspectRatio={state.aspectRatio}
+          balanceCents={balanceCents}
+          costs={configCosts}
+          onSetAspectRatio={setAspectRatio}
           onAddScene={addScene}
           onUpdateScene={updateScene}
           onRemoveScene={removeScene}
@@ -301,6 +346,8 @@ export default function FunnelPage() {
           scenes={state.scenes}
           characters={state.characters}
           selectedStyle={state.selectedStyle}
+          balanceCents={balanceCents}
+          costs={configCosts}
           isGenerating={regeneratingSceneId !== null || (state.generationProgress !== null && state.generationProgress.stage !== "complete")}
           regeneratingSceneId={regeneratingSceneId}
           onConfirm={handleConfirmAndAnimate}
@@ -312,6 +359,7 @@ export default function FunnelPage() {
 
       {state.step === "paywall" && (
         <PaywallStep
+          plans={configPlans}
           onSelectPlan={handleSelectPlan}
           onBack={() => setStep("scenes")}
           isLoading={paymentLoading}
@@ -332,6 +380,8 @@ export default function FunnelPage() {
           scenes={state.scenes}
           videoUrls={state.videoUrls}
           selectedStyle={state.selectedStyle}
+          aspectRatio={state.aspectRatio}
+          balanceCents={balanceCents}
           onCreateNew={() => {
             handleGenerationComplete();
             reset();

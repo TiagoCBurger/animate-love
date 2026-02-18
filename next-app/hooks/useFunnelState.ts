@@ -1,7 +1,7 @@
 "use client";
 
-import { useReducer, useCallback, useEffect, useRef } from "react";
-import type { FunnelState, FunnelAction, FunnelStep, Character, SerializableDraft } from "@/types/funnel";
+import { useReducer, useCallback, useEffect } from "react";
+import type { FunnelState, FunnelAction, FunnelStep, Character, SerializableDraft, AspectRatio } from "@/types/funnel";
 import type { Scene, SceneDuration, SceneType } from "@/types/scene";
 import { createScene } from "@/types/scene";
 
@@ -14,6 +14,7 @@ const initialState: FunnelState = {
   step: "landing",
   characters: [],
   selectedStyle: null,
+  aspectRatio: "9:16",
   scenes: [],
   generationProgress: null,
   generationError: null,
@@ -44,6 +45,9 @@ function funnelReducer(state: FunnelState, action: FunnelAction): FunnelState {
 
     case "SET_STYLE":
       return { ...state, selectedStyle: action.styleId };
+
+    case "SET_ASPECT_RATIO":
+      return { ...state, aspectRatio: action.aspectRatio };
 
     case "ADD_SCENE": {
       const newScene = createScene(
@@ -94,6 +98,7 @@ function funnelReducer(state: FunnelState, action: FunnelAction): FunnelState {
           originalFile: null,
         })),
         selectedStyle: action.draft.selectedStyle,
+        aspectRatio: action.draft.aspectRatio || "9:16",
         scenes: action.draft.scenes,
         videoUrls: action.draft.videoUrls,
       };
@@ -132,6 +137,11 @@ export function useFunnelState() {
 
   const setStyle = useCallback(
     (styleId: string | null) => dispatch({ type: "SET_STYLE", styleId }),
+    []
+  );
+
+  const setAspectRatio = useCallback(
+    (aspectRatio: AspectRatio) => dispatch({ type: "SET_ASPECT_RATIO", aspectRatio }),
     []
   );
 
@@ -183,6 +193,7 @@ export function useFunnelState() {
         step: state.step,
         characters: state.characters.map(({ originalFile, ...rest }) => rest),
         selectedStyle: state.selectedStyle,
+        aspectRatio: state.aspectRatio,
         scenes: state.scenes,
         videoUrls: state.videoUrls,
       };
@@ -213,16 +224,8 @@ export function useFunnelState() {
     }
   }, []);
 
-  // Auto-load draft on mount (works for logged and non-logged users)
-  const hasLoadedDraft = useRef(false);
-  useEffect(() => {
-    if (!hasLoadedDraft.current) {
-      hasLoadedDraft.current = true;
-      loadDraft();
-    }
-  }, [loadDraft]);
-
   // Auto-save draft whenever user reaches a meaningful step
+  // (saving is always fine — loading is controlled by the page)
   useEffect(() => {
     if (SAVEABLE_STEPS.includes(state.step) && state.characters.length > 0) {
       saveDraft();
@@ -237,6 +240,7 @@ export function useFunnelState() {
     updateCharacter,
     removeCharacter,
     setStyle,
+    setAspectRatio,
     addScene,
     updateScene,
     removeScene,

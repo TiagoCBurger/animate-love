@@ -1,7 +1,7 @@
 import AbacatePay from "abacatepay-nodejs-sdk";
-import { PLANS, type PlanId } from "./plans";
+import { PLANS, type PlanId, type Plan } from "./plans";
 
-export { PLANS, type PlanId } from "./plans";
+export { PLANS, type PlanId, type Plan } from "./plans";
 
 const apiKey = process.env.ABACATEPAY_API_KEY;
 
@@ -12,7 +12,9 @@ if (!apiKey) {
 export const abacatepay = apiKey ? AbacatePay(apiKey) : null;
 
 export interface CreateBillingParams {
-  planId: PlanId;
+  planId: string;
+  /** If provided, uses this plan data instead of looking up static PLANS. */
+  plan?: Plan;
   customer: {
     name: string;
     email: string;
@@ -42,15 +44,20 @@ export async function createBilling(params: CreateBillingParams): Promise<Billin
     throw new Error("AbacatePay not configured");
   }
 
-  const plan = PLANS[params.planId];
+  // Prefer explicit plan data, fall back to static PLANS
+  const plan = params.plan || PLANS[params.planId];
   if (!plan) {
     throw new Error("Invalid plan");
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  // Store planId and credits in the product externalId for webhook reference
+  // Store planId and total credits in the product externalId for webhook reference
   const externalId = `${plan.id}:${plan.totalCredits}`;
+
+  const productName = plan.bonusCredits > 0
+    ? `${plan.credits} créditos + ${plan.bonusCredits} bônus`
+    : `${plan.credits} créditos`;
 
   const billing = await abacatepay.billing.create({
     frequency: "ONE_TIME",
@@ -58,7 +65,7 @@ export async function createBilling(params: CreateBillingParams): Promise<Billin
     products: [
       {
         externalId: externalId,
-        name: `${plan.name} + ${plan.bonus} bônus`,
+        name: productName,
         quantity: 1,
         price: plan.price,
       },
